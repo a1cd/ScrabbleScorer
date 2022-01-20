@@ -1,0 +1,206 @@
+name: Test All Class Tests
+
+on:
+  push:
+    branches: [ master ]
+    paths-ignore:
+      - docs
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  getAllTestFiles:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v2
+      - id: set-matrix
+        run: bash ./.github/scripts/getFiles.sh
+        shell: bash
+  isTestResources:
+    runs-on: ubuntu-latest
+    outputs:
+      areFiles: ${{ steps.random-number-generator.outputs.bool }}
+    steps:
+      - uses: actions/checkout@v2
+      - id: set-value
+        run: bash ./.github/scripts/areFilesInDirectory.sh test
+        shell: bash
+  compileTestJava:
+    name: Compile Test Java Classes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-java@v2
+        with:
+          java-version: '16'
+          distribution: 'adopt'
+      - name: Validate Gradle wrapper
+        uses: gradle/wrapper-validation-action@e6e38bacfdf1a337459f332974bb2327a31aaf4b
+      - name: Build
+        run: ./gradlew :compileTestJava
+  isResources:
+    runs-on: ubuntu-latest
+    outputs:
+      areFiles: ${{ steps.random-number-generator.outputs.bool }}
+    steps:
+      - uses: actions/checkout@v2
+      - id: set-value
+        run: bash ./.github/scripts/areFilesInDirectory.sh main
+        shell: bash
+  compileJava:
+    name: Compile Java
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-java@v2
+        with:
+          java-version: '16'
+          distribution: 'adopt'
+      - name: Validate Gradle wrapper
+        uses: gradle/wrapper-validation-action@e6e38bacfdf1a337459f332974bb2327a31aaf4b
+      - name: Build
+        run: ./gradlew :compileJava
+      - name: Archive production artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: build
+          path: build
+  processTestResources:
+    name: Process Test Resources
+    runs-on: ubuntu-latest
+    needs: [ compileTestJava, isTestResources ]
+    #    if: ${{ needs.isTestResources.areFiles }}
+    steps:
+      - uses: actions/checkout@v2
+        if: ${{ needs.isResources.areFiles }}
+      - name: Download all workflow run artifacts
+        uses: actions/download-artifact@v2
+        if: ${{ needs.isResources.areFiles }}
+      - uses: actions/setup-java@v2
+        with:
+          java-version: '16'
+          distribution: 'adopt'
+        if: ${{ needs.isResources.areFiles }}
+      - name: Validate Gradle wrapper
+        uses: gradle/wrapper-validation-action@e6e38bacfdf1a337459f332974bb2327a31aaf4b
+        if: ${{ needs.isResources.areFiles }}
+      - name: :processTestResources
+        run: ./gradlew :processTestResources
+        if: ${{ needs.isResources.areFiles }}
+      - name: Archive production artifacts
+        if: ${{ needs.isResources.areFiles }}
+        uses: actions/upload-artifact@v2
+        with:
+          name: build
+          path: build
+  processResources:
+    name: Process Resources
+    runs-on: ubuntu-latest
+    needs: [ compileJava, isResources ]
+    steps:
+      - uses: actions/checkout@v2
+        if: ${{ needs.isResources.areFiles }}
+      - name: Download all workflow run artifacts
+        uses: actions/download-artifact@v2
+        if: ${{ needs.isResources.areFiles }}
+      - uses: actions/setup-java@v2
+        with:
+          java-version: '16'
+          distribution: 'adopt'
+        if: ${{ needs.isResources.areFiles }}
+      - name: Validate Gradle wrapper
+        uses: gradle/wrapper-validation-action@e6e38bacfdf1a337459f332974bb2327a31aaf4b
+        if: ${{ needs.isResources.areFiles }}
+      - name: processResources
+        run: ./gradlew :processResources
+        if: ${{ needs.isResources.areFiles }}
+      - name: Archive production artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: build
+          path: build
+        if: ${{ needs.isResources.areFiles }}
+  assembleMainClasses:
+    name: Assemble Main Classes
+    runs-on: ubuntu-latest
+    needs: [compileJava, processResources]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Download all workflow run artifacts
+        uses: actions/download-artifact@v2
+      - uses: actions/setup-java@v2
+        with:
+          java-version: '16'
+          distribution: 'adopt'
+      - name: Validate Gradle wrapper
+        uses: gradle/wrapper-validation-action@e6e38bacfdf1a337459f332974bb2327a31aaf4b
+      - name: classes
+        run: ./gradlew :classes
+      - name: Archive production artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: build
+          path: build
+  assembleTestClasses:
+    name: Assemble Test Classes
+    runs-on: ubuntu-latest
+    needs: [ compileTestJava, processTestResources ]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Download all workflow run artifacts
+        uses: actions/download-artifact@v2
+      - uses: actions/setup-java@v2
+        with:
+          java-version: '16'
+          distribution: 'adopt'
+      - name: Validate Gradle wrapper
+        uses: gradle/wrapper-validation-action@e6e38bacfdf1a337459f332974bb2327a31aaf4b
+      - name: testClasses
+        run: ./gradlew :testClasses
+      - name: Archive production artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: build
+          path: build
+  Javadoc:
+    name: Javadoc test
+    runs-on: ubuntu-latest
+    needs: [compileJava, processResources, assembleMainClasses]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Download all workflow run artifacts
+        uses: actions/download-artifact@v2
+      - uses: actions/setup-java@v2
+        with:
+          java-version: '16'
+          distribution: 'adopt'
+      - name: Validate Gradle wrapper
+        uses: gradle/wrapper-validation-action@e6e38bacfdf1a337459f332974bb2327a31aaf4b
+      - name: do all methods have javadoc
+        run: ./gradlew :javadoc
+      - name: Archive production artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: build
+          path: build
+  RunAllTestFiles:
+    name: Test - ${{ matrix.class }}
+    needs: [getAllTestFiles, compileJava, compileTestJava, processResources, processTestResources, assembleMainClasses, assembleTestClasses]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{fromJson(needs.getAllTestFiles.outputs.matrix)}}
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-java@v2
+        with:
+          java-version: '16'
+          distribution: 'adopt'
+      - name: Validate Gradle wrapper
+        uses: gradle/wrapper-validation-action@e6e38bacfdf1a337459f332974bb2327a31aaf4b
+      - name: Download all workflow run artifacts
+        uses: actions/download-artifact@v2
+      - name: Run the Gradle class test
+        id: testTheClass
+        run: ./gradlew :test --tests ${{ matrix.class }}
